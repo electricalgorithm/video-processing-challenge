@@ -1,5 +1,6 @@
 import os
 import subprocess
+from random import randint
 import numpy as np
 from scipy.io.wavfile import write
 import matplotlib.pyplot as plt
@@ -214,42 +215,6 @@ def get_wav_duration(file_path) -> None:
 
     return int(duration_s)
 
-def watermark_frames(input_dir, text_to_watermark, frame_interval=30, start_frame=0):
-    # Get all files in the input directory.
-    files = sorted(os.listdir(input_dir))
-    splitted_text = text_to_watermark.split(" ")
-    splitted_text_index = 0
-    frame_number = 0
-
-    # Iterate over the files in the input directory.
-    for i, filename in enumerate(files):
-        if filename.endswith(".png"):
-            
-            # Count the frame number.
-            if splitted_text_index >= len(splitted_text):
-                break
-
-            # If the frame number is a multiple of the frame interval, watermark the current frame.
-            if frame_number >= start_frame and frame_number % frame_interval == 0:
-                # Open the image.
-                watermark_image = Image.open(os.path.join(input_dir, filename))
-
-                # Add a watermark to the image.
-                draw = ImageDraw.Draw(watermark_image)
-                font = ImageFont.truetype("docs/Arial.ttf", 150)
-                draw.text((500, 500), splitted_text[splitted_text_index], fill=(255, 0, 0, 128), font=font, align='left')
-                
-                # Log the watermarking.
-                print(f"Watermarking frame {frame_number+1} with {splitted_text[splitted_text_index]}.")
-
-                # Save the frame.
-                watermark_image.save(os.path.join(input_dir, filename))
-                splitted_text_index += 1
-            
-            # Increment the frame number.
-            frame_number = i + 1
-
-
 def extract_frames_from_video(input_video: str, output_directory: str, frame_rate: int = 30):
     """Extract frames from a video using ffmpeg.
     :param input_video: path to the input video
@@ -271,7 +236,6 @@ def extract_frames_from_video(input_video: str, output_directory: str, frame_rat
     except subprocess.CalledProcessError as e:
         print("Error:", e)
         print("Frame extraction failed.")
-
 
 def create_video_from_frames(input_frames_dir: str, output_video: str, frame_rate: int = 30):
     """Create a video from frames using ffmpeg.
@@ -297,10 +261,8 @@ def create_video_from_frames(input_frames_dir: str, output_video: str, frame_rat
         print("Error:", e)
         print("Video creation from frames failed.")
 
-
-def prepare_environment(docs_directory: str = "docs", temp_directory: str = "temp", frame_extract_directory: str = "secret_frames"):
+def prepare_environment(docs_directory: str = "docs", temp_directory: str = ".temp", frame_extract_directory: str = "secret_frames"):
     # Define the paths for the directories
-    temp_directory = os.path.join(docs_directory, temp_directory)
     secret_frames_directory = os.path.join(temp_directory, frame_extract_directory)
 
     # Create the "temp" folder under "docs"
@@ -312,7 +274,6 @@ def prepare_environment(docs_directory: str = "docs", temp_directory: str = "tem
         os.makedirs(secret_frames_directory)
 
     print("Folders created successfully.")
-
 
 def combine_video_with_audio(video: str, sound: str, output: str) -> None:
     """Combine a video with given sound.
@@ -335,3 +296,93 @@ def combine_video_with_audio(video: str, sound: str, output: str) -> None:
     except subprocess.CalledProcessError as e:
         print("Error:", e)
         print("Video combination with sound has encountered a problem.")
+
+def divide_image_to_tabular(image_location: str, tabular_dims: str) -> list[list[dict[str, object]]]:
+    """It divides a PIL Image into tabular sub-images with given
+    dimensions.
+    :param image: Image's path
+    :param tabular_dims: A string contains dimensions such as 3x4 (3 rows, 4 cols).
+    """
+    # Copy the image object.
+    image = Image.open(image_location)
+
+    # Parse tabular_dims.
+    rows = int(tabular_dims.split("x")[0])
+    cols = int(tabular_dims.split("x")[1])
+
+    # Calculate the size of sub-images.
+    width, height = image.size
+    sub_width = width // cols
+    sub_height = height // rows
+
+    sub_images_matrix: list[list[dict[str, object]]] = []
+    for row_index in range(rows):
+        row_images: list[dict[str, object]] = []
+
+        for col_index in range(cols):
+            # Calculate the coordinates of currect sub image.
+            left_coord = col_index * sub_width
+            righ_coord = left_coord + sub_width
+            upper_coord = row_index * sub_height
+            lower_coord = upper_coord + sub_height
+            # Extract the sub image and store it.
+            sub_image = image.crop((left_coord, upper_coord, righ_coord, lower_coord))
+            image_data = {
+                "image": sub_image,
+                "left_start": left_coord,
+                "upper_start": upper_coord,
+            }
+            row_images.append(image_data)
+        sub_images_matrix.append(row_images)
+
+    # Close the first image.
+    image.close()
+
+    return sub_images_matrix
+
+def insert_images_into_frames(input_dir: str, image_to_overlay: str, tabular_dims: str = "6x6", frame_interval=30, start_frame=0):
+    # Get all files in the input directory.
+    files = sorted(os.listdir(input_dir))
+    frame_number = 0
+
+    sub_images = divide_image_to_tabular(image_to_overlay, tabular_dims)
+    possible_sub_images = [
+        (row_index, col_index)
+        for row_index in range(len(sub_images))
+        for col_index in range(len(sub_images[0]))
+    ]
+
+    # Iterate over the files in the input directory.
+    for i, filename in enumerate(files):
+        if filename.endswith(".png"):
+
+            if len(possible_sub_images) == 0:
+                break
+
+            # If the frame number is a multiple of the frame interval, watermark the current frame.
+            if frame_number >= start_frame and frame_number % frame_interval == 0:
+                # Open the image.
+                frame = Image.open(os.path.join(input_dir, filename))
+
+                # Add a sub-image to main frame.
+                random_index = randint(0, len(possible_sub_images)-1)
+                sub_image_index = possible_sub_images[random_index]
+                sub_image_to_place = sub_images[sub_image_index[0]][sub_image_index[1]]
+                
+                # Get image data
+                sub_image = sub_image_to_place["image"]
+                sub_image_left_start = sub_image_to_place["left_start"]
+                sub_image_upper_start = sub_image_to_place["upper_start"]
+                
+                # Paste onto main frame.
+                frame.paste(sub_image, (sub_image_left_start, sub_image_upper_start))
+                print(f"Sub image {possible_sub_images[random_index]} placed onto frame {frame_number+1}.")
+                
+                # Delete from old list.
+                del possible_sub_images[random_index]
+
+                # Save the frame.
+                frame.save(os.path.join(input_dir, filename))
+            
+            # Increment the frame number.
+            frame_number = i + 1
