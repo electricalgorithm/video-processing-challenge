@@ -13,7 +13,7 @@ db_high = 20                                                # Amplitude for '1' 
 db_low = -20                                                # Amplitude for '0' bits (in dB)
 start_time = 14                                             # Trimming start in seconds.
 input_file = "docs/bbb_sunflower_1080p_30fps_normal.mp4"    # The video to encode flag into.
-hint_image = "docs/hint_image.png"                          # The hint image to place onto frames.
+hint_image = "docs/flag_hint.png"                           # The hint image to place onto frames.
 output_file = "challenge_video.mp4"                         # The output file.
 
 # Internal files.
@@ -58,7 +58,7 @@ print("> Combining the channels with bass flag into 5.1 channels.")
 combine_to_5_1_audio(_left_output_file, _left_output_file, _right_output_file, _flag_audio_file, _left_output_file, _right_output_file, _output_file_5_1)
 
 print("#######################################################")
-print("##### ORIGINAL VIDEO HAS COMBINED WITH FLAG BASS ######")
+print("##### ORIGINAL SOUND HAS COMBINED WITH FLAG BASS ######")
 print("#######################################################")
 
 # Construct the new video.
